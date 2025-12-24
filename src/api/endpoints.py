@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 from src.api.schemas import ShipmentRequest, PredictionResponse, HealthResponse
 from src.enrichment.inference_pipeline import FlowSightPredictor
+from src.explainability.llm_explainer import LLMExplainer
 from src.exceptions import ModelInferenceError
 from src.logging_utils import get_logger
 
@@ -14,8 +15,9 @@ logger = get_logger(__name__)
 
 router = APIRouter()
 
-# Global predictor instance (loaded once at startup)
+# Global instances (loaded once at startup)
 _predictor: Optional[FlowSightPredictor] = None
+_llm_explainer: Optional[LLMExplainer] = None
 
 
 def get_predictor() -> FlowSightPredictor:
@@ -27,15 +29,19 @@ def get_predictor() -> FlowSightPredictor:
 
 
 def initialize_predictor():
-    """Initialize predictor at startup."""
-    global _predictor
+    """Initialize predictor and LLM explainer at startup."""
+    global _predictor, _llm_explainer
     try:
         logger.info("Initializing FlowSight predictor...")
         _predictor = FlowSightPredictor()
         logger.info("Predictor initialized successfully")
+        
+        logger.info("Initializing LLM explainer...")
+        _llm_explainer = LLMExplainer()
+        logger.info("LLM explainer initialized successfully")
     except Exception as exc:
-        logger.exception("Failed to initialize predictor")
-        raise RuntimeError("Predictor initialization failed") from exc
+        logger.exception("Failed to initialize services")
+        raise RuntimeError("Service initialization failed") from exc
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -95,7 +101,7 @@ async def predict_delay(
         # Build response - CONVERT ALL NUMPY TYPES TO PYTHON TYPES
         response_data = {
             "prediction": {
-                "will_delay": bool(result['will_delay']),  # Convert numpy.bool
+                "will_delay": bool(result['will_delay']),
                 "delay_probability": float(round(result['delay_probability'], 3)),
                 "estimated_delay_days": float(round(result['estimated_delay_days'], 2)),
                 "delay_reason": str(result['delay_reason']),
@@ -123,7 +129,9 @@ async def predict_delay(
         # Add LLM explanation if requested
         if explain:
             response_data["explanation"] = await generate_llm_explanation(
-                result, context, shipment_data
+                response_data['prediction'],
+                response_data['enrichment'],
+                shipment_data
             )
         
         return PredictionResponse(**response_data)
@@ -136,11 +144,27 @@ async def predict_delay(
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(exc)}")
 
 
-
-async def generate_llm_explanation(result: dict, context: dict, shipment_data: dict) -> str:
-    """Generate natural language explanation using LLM (placeholder for now)."""
-    # We'll implement this in Part 2 with Groq LLM
-    return "LLM explanation will be added in next step"
+async def generate_llm_explanation(
+    prediction: dict,
+    enrichment: dict,
+    shipment_data: dict
+) -> str:
+    """Generate natural language explanation using LLM."""
+    global _llm_explainer
+    
+    if _llm_explainer is None:
+        return "LLM explainer not initialized"
+    
+    try:
+        explanation = _llm_explainer.generate_explanation(
+            prediction,
+            enrichment,
+            shipment_data
+        )
+        return explanation
+    except Exception as exc:
+        logger.exception("LLM explanation generation failed")
+        return f"Failed to generate explanation: {str(exc)}"
 
 
 @router.get("/")
@@ -149,10 +173,16 @@ async def root():
     return {
         "name": "FlowSight AI",
         "version": "2.0.0",
-        "description": "Supply Chain Delay Prediction API",
+        "description": "Supply Chain Delay Prediction API with LLM Explanations",
         "endpoints": {
             "health": "/health",
             "predict": "/predict",
             "docs": "/docs"
-        }
+        },
+        "features": [
+            "Ensemble ML models (CatBoost + XGBoost + LightGBM)",
+            "Vendor reliability enrichment",
+            "Route validation",
+            "LLM-powered explanations"
+        ]
     }

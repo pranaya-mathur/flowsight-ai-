@@ -1,4 +1,7 @@
 from pathlib import Path
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 
@@ -15,3 +18,4 @@ ENSEMBLE_MODEL_PATH = MODELS_DIR / "ensemble_delay_model.pkl"
 MULTITASK_MODEL_PATH = MODELS_DIR / "multitask_delay_model.pt"
 
 LOG_LEVEL = "INFO"
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")

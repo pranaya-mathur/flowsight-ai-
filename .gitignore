@@ -47,6 +47,8 @@ models/*.pkl
 models/*.pt
 models/*.pth
 
+
 # Local environment config overrides (if any)
 config/local_*.yaml
 config/local_*.yml
+.env.*
