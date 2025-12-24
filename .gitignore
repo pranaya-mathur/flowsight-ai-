@@ -1,0 +1,52 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+.env/
+.env*/
+.venv/
+.venv*/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Python packaging / build
+build/
+dist/
+*.egg-info/
+.eggs/
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Data (keep config, ignore raw/processed feature data)
+data/raw/
+data/processed/
+data/feature_store/*.duckdb*
+data/feature_store/*.wal
+data/feature_store/*.tmp/
+
+# Models & checkpoints
+models/*.pkl
+models/*.pt
+models/*.pth
+
+# Local environment config overrides (if any)
+config/local_*.yaml
+config/local_*.yml
