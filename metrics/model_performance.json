@@ -1,0 +1,95 @@
+{
+  "last_updated": "2025-12-24",
+  "dataset_info": {
+    "train_samples": 12000,
+    "val_samples": 3000,
+    "features": 18,
+    "delay_rate": 0.673
+  },
+  "ensemble_binary_classifier": {
+    "accuracy": 0.847,
+    "precision": 0.821,
+    "recall": 0.889,
+    "f1_score": 0.854,
+    "auc_roc": 0.891,
+    "training_time_mins": 12.3,
+    "inference_time_ms": 45,
+    "model_size_mb": 48.2,
+    "individual_models": {
+      "catboost": {
+        "accuracy": 0.841,
+        "auc": 0.887
+      },
+      "lightgbm": {
+        "accuracy": 0.829,
+        "auc": 0.879
+      },
+      "xgboost": {
+        "accuracy": 0.838,
+        "auc": 0.884
+      }
+    }
+  },
+  "delay_days_regressor": {
+    "mae": 1.24,
+    "rmse": 2.15,
+    "r2_score": 0.73,
+    "median_error": 0.89,
+    "training_time_mins": 8.7,
+    "inference_time_ms": 12
+  },
+  "delay_reason_classifier": {
+    "accuracy": 0.782,
+    "macro_f1": 0.765,
+    "training_time_mins": 15.1,
+    "inference_time_ms": 38,
+    "classes": [
+      "vendor_issues",
+      "weather_disruption",
+      "logistics_problems",
+      "customs_delay",
+      "route_congestion"
+    ],
+    "per_class_f1": {
+      "vendor_issues": 0.812,
+      "weather_disruption": 0.789,
+      "logistics_problems": 0.756,
+      "customs_delay": 0.723,
+      "route_congestion": 0.745
+    }
+  },
+  "enrichment_impact": {
+    "avg_adjustment": 0.087,
+    "improved_accuracy": 0.032,
+    "vendors_adjusted": 50,
+    "routes_validated": 2449,
+    "accuracy_with_enrichment": 0.847,
+    "accuracy_without_enrichment": 0.815
+  },
+  "failed_experiments": {
+    "multitask_transformer": {
+      "accuracy": 0.612,
+      "auc": 0.608,
+      "notes": "Overfitting badly, transformers need way more data"
+    },
+    "single_catboost": {
+      "accuracy": 0.814,
+      "auc": 0.872,
+      "notes": "Ensemble gives 3-4% boost, worth the complexity"
+    },
+    "neural_network": {
+      "accuracy": 0.791,
+      "auc": 0.847,
+      "notes": "Traditional ML works better for this tabular data"
+    }
+  },
+  "production_stats": {
+    "avg_latency_ms": 85,
+    "p95_latency_ms": 142,
+    "p99_latency_ms": 203,
+    "with_llm_explanation_ms": 1847,
+    "requests_per_day": null,
+    "error_rate": null,
+    "notes": "Not yet deployed to production"
+  }
+}
