@@ -40,6 +40,8 @@ class VendorEnrichment:
     
     def _load_vendor_stats(self) -> None:
         """Load vendor statistics into memory for fast lookup."""
+        # TODO: Add caching mechanism to avoid reloading on every initialization
+        # TODO: Consider using Redis for distributed deployments
         try:
             query = """
             SELECT 
@@ -84,7 +86,7 @@ class VendorEnrichment:
             Adjusted delay probability, clipped to [0, 1]
         """
         try:
-            # Check if vendor exists in our database
+            # FIXME: Handle edge case when vendor_id is None or empty string
             if vendor_id not in self.vendor_map:
                 logger.warning("Unknown vendor: %s, using base prediction", vendor_id)
                 return base_probability
@@ -93,6 +95,8 @@ class VendorEnrichment:
             on_time_rate = vendor_stats['on_time_rate']
             
             # Calculate adjustment based on vendor reliability
+            # NOTE: These thresholds (0.50, 0.65) were determined empirically
+            # TODO: Consider A/B testing different threshold values
             adjustment = self._calculate_adjustment(on_time_rate)
             
             # Apply confidence weighting
@@ -131,20 +135,19 @@ class VendorEnrichment:
         Returns:
             Adjustment value to add to probability (-0.15 to +0.10)
         """
+        # TODO: These adjustment values are currently hardcoded
+        # Consider making them configurable or learning them from data
         if on_time_rate >= 0.65:
             # Good vendor - reduce delay probability
-            # Linear scale: 65% -> -10%, 100% -> -10%
             return -0.10
         
         elif on_time_rate <= 0.50:
             # Poor vendor - increase delay probability
-            # Linear scale: 50% -> +15%, 0% -> +15%
             return 0.15
         
         else:
-            # Average vendor - linear interpolation between -10% and +15%
-            # on_time_rate 0.50 -> +15%, 0.65 -> -10%
-            # Linear interpolation
+            # Average vendor - linear interpolation
+            # HACK: Simple linear scaling for now, could use sigmoid or other curves
             normalized = (on_time_rate - 0.50) / (0.65 - 0.50)
             adjustment = 0.15 + normalized * (-0.10 - 0.15)
             return adjustment
@@ -178,6 +181,7 @@ class VendorEnrichment:
     
     def _get_reliability_tier(self, on_time_rate: float) -> str:
         """Classify vendor reliability into tiers."""
+        # NOTE: Tier boundaries chosen based on business requirements
         if on_time_rate >= 0.65:
             return 'EXCELLENT'
         elif on_time_rate >= 0.55:
