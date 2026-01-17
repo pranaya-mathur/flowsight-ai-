@@ -1,131 +1,196 @@
 # FlowSight AI
 
-Production-ready ML system for predicting shipment delays and estimating arrival times in supply chain operations. Built to handle real-world logistics data with interpretable predictions.
+ML system for predicting shipment delays in supply chain operations. Predicts delay probability, estimates delay duration, and identifies likely causes with LLM-generated explanations.
 
-## What This Does
+> **Status**: In development. Core functionality works, but still rough around the edges (see Known Issues below).
 
-FlowSight predicts whether shipments will be delayed, estimates delay duration, identifies probable delay reasons, and explains predictions in plain language. The system processes shipment metadata (vendor info, routes, historical patterns) and returns actionable predictions through a FastAPI backend and Streamlit dashboard.
+## What It Does
+
+- **Binary classification**: Will this shipment delay? (85% accuracy)
+- **Regression**: How many days late? (MAE 1.24 days)
+- **Multi-class**: Why will it delay? (78% accuracy)
+- **Enrichment**: Adjusts predictions using vendor reliability and route patterns
+- **Explanations**: Generates plain-English explanations via Groq LLaMA
+
+## Quick Start
+
+```bash
+# Clone repo
+git clone https://github.com/pranaya-mathur/flowsight-ai-.git
+cd flowsight-ai-
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Set up environment (optional - for LLM explanations)
+echo "GROQ_API_KEY=your_key_here" > .env
+
+# Initialize feature store (first time only)
+python -c "from src.data.feature_store import FeatureStore; fs = FeatureStore(); fs.load_raw_tables()"
+
+# Train models (if not already trained)
+python -m src.models.train_ensemble
+python -m src.models.train_delay_regressor
+python -m src.models.train_delay_reason
+
+# Start API
+uvicorn src.api.main:app --reload --port 8000
+
+# In another terminal, launch dashboard
+streamlit run src/dashboard/app.py
+```
+
+Open http://localhost:8501 for the dashboard.
 
 ## Architecture
 
 ```
-├── src/
-│   ├── data/           # Data ingestion and processing (DuckDB-based)
-│   ├── enrichment/     # Feature engineering pipeline
-│   ├── models/         # Model training and inference
-│   ├── api/            # FastAPI endpoints
-│   ├── dashboard/      # Streamlit UI
-│   └── explainability/ # LLM-powered prediction explanations
-├── config/             # Configuration management
-├── models/             # Trained model artifacts
-└── data/               # Raw and processed datasets
+src/
+├── data/               # DuckDB feature store + data loading
+├── enrichment/         # Vendor/route adjustment layers
+├── models/             # Training scripts (ensemble, regressor, classifier)
+├── api/                # FastAPI backend
+├── dashboard/          # Streamlit UI
+└── explainability/     # LLM integration for explanations
 ```
 
-## Key Features
+## API Example
 
-- **Multi-model predictions**: Ensemble of CatBoost classifiers for delay detection, duration estimation, and reason classification
-- **Real-time inference**: Sub-second predictions via FastAPI with async handling
-- **Explainability**: LLM integration to convert model outputs into business-friendly explanations
-- **Feature store**: Centralized feature management with DuckDB for efficient querying
-- **Enrichment layer**: Automated feature engineering from raw shipment data
+```bash
+curl -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "origin_city": "Mumbai",
+    "destination_city": "Delhi",
+    "supplier_name": "V001",
+    "product_category": "Electronics",
+    "weight_kg": 500,
+    "value_inr": 50000,
+    "apply_enrichment": true,
+    "explain": false
+  }'
+```
+
+See [docs/API.md](docs/API.md) for full documentation.
+
+## Performance
+
+**Models** (see [metrics/model_performance.json](metrics/model_performance.json)):
+- Ensemble binary classifier: 84.7% accuracy, 0.891 AUC
+- Delay days regressor: 1.24 MAE, 2.15 RMSE
+- Delay reason classifier: 78.2% accuracy
+
+**Inference**:
+- Without LLM: ~85ms avg, ~142ms p95
+- With LLM explanation: ~1.8s (Groq API latency)
+
+**Enrichment Impact**:
+- +3.2% accuracy improvement over base model
+- Vendor adjustment: avg ±8.7%
+- 50 vendors tracked, 2,449 routes
 
 ## Tech Stack
 
-- **ML**: CatBoost, scikit-learn, pandas
-- **Backend**: FastAPI, Pydantic
-- **Data**: DuckDB (feature store), parquet files
-- **Frontend**: Streamlit
-- **Explainability**: LLM-based (OpenAI/Anthropic compatible)
+- **ML**: CatBoost + XGBoost + LightGBM ensemble
+- **Feature Store**: DuckDB (embedded analytics DB)
+- **API**: FastAPI + Pydantic
+- **Dashboard**: Streamlit + Plotly
+- **LLM**: Groq (LLaMA 3.3-70B) via LangChain
 
-## Setup
+## Why Not Neural Networks?
 
-1. Clone and install dependencies:
-```bash
-git clone https://github.com/pranaya-mathur/flowsight-ai-.git
-cd flowsight-ai-
-pip install -r requirements.txt
-```
+Tried transformers and multi-task NNs first (see `src/models/train_multitask_transformer.py`). Results were terrible:
+- Transformer: 61% accuracy vs 85% for ensemble
+- Neural net: Overfitting badly on 15k samples
+- Traditional ML just works better on tabular data with limited samples
 
-2. Set up environment variables:
-```bash
-cp .env.example .env
-# Add your API keys and database paths
-```
+Kept the transformer code for reference.
 
-3. Run the API:
-```bash
-uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000
-```
+## Known Issues
 
-4. Launch the dashboard:
-```bash
-streamlit run src/dashboard/app.py
-```
+- [ ] Dashboard crashes with null/empty vendor IDs ([#2](https://github.com/pranaya-mathur/flowsight-ai-/issues/2))
+- [ ] LLM explanations timeout on slow networks (30s limit)
+- [ ] No caching for DuckDB lookups - adds ~10ms per request ([#1](https://github.com/pranaya-mathur/flowsight-ai-/issues/1))
+- [ ] LightGBM underperforms on routes with <100 samples ([#3](https://github.com/pranaya-mathur/flowsight-ai-/issues/3))
+- [ ] No model versioning yet ([#4](https://github.com/pranaya-mathur/flowsight-ai-/issues/4))
+- [ ] Test coverage is ~40% (need more tests)
 
-## API Usage
-
-### Predict Delay
-```python
-import requests
-
-payload = {
-    "vendor_id": "V12345",
-    "route_id": "R789",
-    "shipment_date": "2026-01-15",
-    "quantity": 1500,
-    "distance_km": 450
-}
-
-response = requests.post("http://localhost:8000/predict", json=payload)
-print(response.json())
-```
-
-**Response:**
-```json
-{
-  "will_delay": true,
-  "delay_probability": 0.78,
-  "estimated_delay_days": 3.2,
-  "delay_reason": "weather_disruption",
-  "explanation": "High probability of delay due to vendor's recent performance issues and adverse weather conditions on route."
-}
-```
-
-## Model Training
-
-Models are trained using historical shipment data with features like:
-- Vendor reliability scores
-- Route complexity metrics
-- Seasonal patterns
-- Historical delay rates
-- Distance and logistics parameters
-
-Training scripts and notebooks are in `src/models/`. The current ensemble achieves ~85% accuracy on delay classification with mean absolute error of 1.2 days on delay duration estimates.
+See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) if you hit issues.
 
 ## Project Structure
 
-- `diagnostic_*.py`: Schema inspection utilities
-- `inspect_*.py`: Feature store and training data validation
-- `test_*.py`: End-to-end testing for all components
-- `src/exceptions.py`: Custom exception handling
-- `src/logging_utils.py`: Centralized logging configuration
+**Key files**:
+- `src/enrichment/inference_pipeline.py` - Main prediction coordinator
+- `src/enrichment/vendor_adjustment.py` - Vendor reliability layer
+- `src/api/endpoints.py` - API route handlers
+- `src/dashboard/app.py` - Streamlit UI
 
-## Development Notes
+**Utilities**:
+- `test_*.py` - Integration tests
+- `inspect_*.py` - Data validation scripts
+- `diagnostic_*.py` - Schema debugging tools
 
-The repo uses CatBoost for traditional ML due to superior performance vs neural approaches (tested transformers and multi-task NNs with worse results). Model files are excluded from version control due to size - they're generated during training.
+## Development
+
+**Adding features**:
+```python
+# Edit src/data/features.py
+# Rebuild feature store
+python -c "from src.data.feature_store import FeatureStore; fs = FeatureStore(); fs.load_raw_tables()"
+# Retrain models
+python -m src.models.train_ensemble
+```
+
+**Testing API**:
+```bash
+python test_api.py
+```
+
+**Logs**:
+Check `logs/` directory or set `LOG_LEVEL=DEBUG` in config.
 
 ## Roadmap
 
-- [ ] Docker containerization
-- [ ] CI/CD pipeline setup
-- [ ] Model versioning with DVC
+**Short term**:
+- [ ] Fix dashboard validation bugs
+- [ ] Add request caching
+- [ ] Improve test coverage
+- [ ] Docker setup
+
+**Medium term**:
+- [ ] Model versioning (DVC or MLflow)
+- [ ] Batch prediction endpoint
 - [ ] A/B testing framework
-- [ ] Performance monitoring dashboard
+- [ ] Monitoring dashboard
+
+**Long term**:
+- [ ] Real-time model updates
+- [ ] Multi-region deployment
+- [ ] Mobile app?
+
+## Data
+
+Requires three CSV files in `data/raw/`:
+- `supply_chain_15000_expanded.csv` - Main shipment data
+- `vendor_performance_download.csv` - Vendor statistics
+- `shipments_augmented.csv` - Route statistics
+
+Model artifacts go in `models/` (generated during training, not in git).
+
+## Contributing
+
+PRs welcome! Areas that need help:
+- Test coverage improvement
+- Performance optimization
+- Documentation
+- Bug fixes (see issues)
 
 ## License
 
 MIT
 
----
+## Acknowledgments
 
-Built for production supply chain environments. PRs welcome.
+- CatBoost team for the excellent docs
+- Groq for fast LLM inference
+- Supply chain dataset from [source TBD]
